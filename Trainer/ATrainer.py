@@ -12,6 +12,7 @@ from LossModel.ALossModel import ALossModel
 from ModelSaver.AModelSaver import AModelSaver
 from Utils.LoggerUtil import LoggerUtil
 from torch.optim import Optimizer
+from InfoLogger.AInfoLogger import AInfoLogger
 
 logger = LoggerUtil.get_logger()
 
@@ -67,6 +68,9 @@ class ATrainer(metaclass=ABCMeta):
         #  scheuler
         self.lr_scheduler = self.get_lr_scheduler(optimizer=self.optimizer)
 
+        # info logger
+        self.info_logger = self.get_info_logger()
+
     @abstractmethod
     def get_data_loader(self) -> Tuple[DataLoader, DataLoader]:
         pass
@@ -103,11 +107,14 @@ class ATrainer(metaclass=ABCMeta):
     def get_lr_scheduler(self, optimizer: Optimizer) -> torch.optim.lr_scheduler._LRScheduler:
         pass
 
+    @abstractmethod
+    def get_info_logger(self) -> AInfoLogger:
+        pass
+
     def train(self):
         # train
         global_step = 1
         logger.info("start train")
-        best_metric = -1
         for epoch in range(self.num_epoch):
             for step, ipt in enumerate(self.train_data_loader):
                 global_step += 1
@@ -115,7 +122,7 @@ class ATrainer(metaclass=ABCMeta):
                 loss = self.loss_model(model_output, ipt)
                 loss.backward()
                 # 梯度裁剪
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
+                # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
                 # 梯度下降，更新参数
                 self.optimizer.step()
                 self.lr_scheduler.step()
@@ -123,26 +130,14 @@ class ATrainer(metaclass=ABCMeta):
                 self.model.zero_grad()
                 self.optimizer.zero_grad()
 
-                # 如果符合要求则会进行模型评估
+                # 如果符合条件则会进行模型评估
                 eval_result = self.evaluator.try_evaluate(model=self.model, global_step=global_step,
                                                           epoch_steps=self.epoch_steps,
                                                           num_epochs=self.num_epoch)
-                # 如果符合要求则会保存模型
+                # 如果符合条件则会保存模型
                 self.model_saver.try_save_model(model=self.model, step=step, global_step=global_step,
                                                 epoch_steps=self.epoch_steps,
                                                 num_epochs=self.num_epoch, eval_result=eval_result)
-
-                if step % clf_train_config.log_step == 0:
-                    logger.info("epoch-{}, step-{}/{}, loss:{}".format(epoch + 1, step, epoch_steps, loss.data))
-
-                if global_step % clf_train_config.eval_step == 0:
-                    # 做个测试
-                    metrics = evaluator.evaluate(model, dev_data_iter)
-                    metric_str = "".join(
-                        ["{}:{},\t".format(k, float(v)) for k, v in metrics.items() if k != "main_metric"])
-                    metric_str = "epoch-{}, step-{}/{}, metrics:".format(epoch + 1, step, epoch_steps) + metric_str
-                    logger.info(metric_str)
-                    main_metric = metrics["main_metric"]
-                    if main_metric > best_metric:
-                        model.save(best_model_dir)
-                        best_metric = main_metric
+                # 如果符合条件则会输出相关信息
+                self.info_logger.try_print_log(loss=loss, eval_result=eval_result, step=step, global_step=global_step,
+                                               epoch_steps=self.epoch_steps, num_epochs=self.num_epoch, )
