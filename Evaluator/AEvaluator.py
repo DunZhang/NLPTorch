@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from Model.AModel import AModel
 
 
-class AEvaluator():
+class AEvaluator(metaclass=ABCMeta):
     @abstractmethod
     def evaluate(self, model: AModel, data_loader: DataLoader, *args, **kwargs) -> Dict:
         pass
