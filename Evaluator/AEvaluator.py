@@ -5,9 +5,13 @@ from abc import ABCMeta, abstractmethod
 from typing import Dict, Union
 from torch.utils.data import DataLoader
 from Model.AModel import AModel
+from Config.AConfig import AConfig
 
 
 class AEvaluator(metaclass=ABCMeta):
+    def __init__(self, conf: AConfig):
+        self.conf = conf
+
     @abstractmethod
     def evaluate(self, model: AModel, data_loader: DataLoader, *args, **kwargs) -> Dict:
         pass

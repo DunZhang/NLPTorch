@@ -36,11 +36,8 @@ def seed_everything(seed=1029):
 
 
 class ATrainer(metaclass=ABCMeta):
-    def __init__(self, model_config: AConfig, data_config: AConfig, train_config: AConfig, evaluate_config: AConfig):
-        self.model_confg = model_config
-        self.data_config = data_config
-        self.train_config = train_config
-        self.evaluate_config = evaluate_config
+    def __init__(self, conf: AConfig):
+        self.conf = conf
         # model
         self.model = self.get_model()
 
@@ -100,7 +97,11 @@ class ATrainer(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def get_step_info(self):
+    def get_step_info(self) -> Tuple[int, int]:
+        """
+
+        :return:[num_epoch, epoch_steps]
+        """
         pass
 
     @abstractmethod
@@ -112,6 +113,8 @@ class ATrainer(metaclass=ABCMeta):
         pass
 
     def train(self):
+        self.model = self.model.to(self.device)
+        self.loss_model = self.loss_model.to(self.device)
         # train
         global_step = 1
         logger.info("start train")
@@ -123,6 +126,8 @@ class ATrainer(metaclass=ABCMeta):
                 loss.backward()
                 # 梯度裁剪
                 # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
+                # 对抗训练
+                # 梯度累计
                 # 梯度下降，更新参数
                 self.optimizer.step()
                 self.lr_scheduler.step()
@@ -131,7 +136,9 @@ class ATrainer(metaclass=ABCMeta):
                 self.optimizer.zero_grad()
 
                 # 如果符合条件则会进行模型评估
-                eval_result = self.evaluator.try_evaluate(model=self.model, global_step=global_step,
+                eval_result = self.evaluator.try_evaluate(model=self.model, data_loader=self.dev_data_loader,
+                                                          step=step,
+                                                          global_step=global_step,
                                                           epoch_steps=self.epoch_steps,
                                                           num_epochs=self.num_epoch)
                 # 如果符合条件则会保存模型
@@ -140,4 +147,4 @@ class ATrainer(metaclass=ABCMeta):
                                                 num_epochs=self.num_epoch, eval_result=eval_result)
                 # 如果符合条件则会输出相关信息
                 self.info_logger.try_print_log(loss=loss, eval_result=eval_result, step=step, global_step=global_step,
-                                               epoch_steps=self.epoch_steps, num_epochs=self.num_epoch, )
+                                               epoch_steps=self.epoch_steps, num_epochs=self.num_epoch, epoch=epoch + 1)
